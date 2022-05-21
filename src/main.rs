@@ -112,11 +112,58 @@ const MEM_AVAIL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,6,0]; //memAvailReal.0 - 
 //const HR_DEVICE_TABLE: &[u32; 9] = &[1,3,6,1,2,1,25,3,2]; //hrDeviceTable - set of services that this entity may potentially offer (sum)
 
 //const HR_MEMORY_SIZE: &[u32; 10] = &[1,3,6,1,2,1,25,2,2,0]; //hrMemorySize.0 - RAM contained by the host. (KBytes)
-//const HR_SW_RUN_PERF_MEM: &[u32; 12] = &[1,3,6,1,2,1,25,5,1,1,2,0]; //hrSWRunPerfMem - The total amount of real system memory allocated to a process.
+const HR_SW_RUN_PERF_MEM: &[u32; 12] = &[1,3,6,1,2,1,25,5,1,1,2,0]; //hrSWRunPerfMem - The total amount of real system memory allocated to a process.
 
-fn zscore(session: SyncSession,threshold: f32)
+struct Process {
+    pid: u32,
+    score: u32,
+}
+
+fn zscore(session: &mut SyncSession,threshold: f64) -> u32
 {
+    let mut process_number = 0;
+    let mut response = session.get(HR_SYSTEM_PROCESSES).unwrap();
+    if let Some((_, Value::Unsigned32(descr))) = response.varbinds.next() {
+        println!("hrSystemProcesses: {}",descr);
+        process_number = descr; 
+    }
 
+    let mut v = vec![];
+
+    let mut temp = HR_SW_RUN_PERF_MEM.clone(); 
+    let mut sum: usize =0;
+    for n in 0..=process_number {
+        response = session.getnext(&temp).unwrap();
+        if let Some((_oid, Value::Integer(descr))) = response.varbinds.next() {
+            //println!("{} => {}: {}", n,_oid,sys_descr);
+            temp[11] = _oid.to_string().split('.').last().unwrap().parse::<u32>().unwrap();
+            sum += descr as usize;
+            v.push(Process {
+                pid: temp[11],
+                score: descr as u32,
+            });
+        }
+    }
+    println!("hrSWRunPerfMem: {}",sum);
+
+    let average: f64 = sum as f64/ process_number as f64;
+    println!("average: {}",average);
+    let variance: f64 = v.iter().map(|x| (x.score as f64 - average).powf(2.0)).sum::<f64>()/v.len() as f64;
+    println!("variance: {}",variance);
+    let stddev: f64 = (variance as f64).sqrt();
+    println!("stddev: {}",stddev);
+
+    let mut num_outliers: u32 =0;
+    for n in 0..v.len()
+    {
+        let zscore = (v[n].score as f64 - average)/stddev;
+        if zscore > threshold || zscore < -threshold {
+            println!("{} => {}",v[n].pid,zscore);
+            num_outliers += 1;
+        }
+    }
+
+    num_outliers
 }
 fn main() {
     let args = Args::parse();
