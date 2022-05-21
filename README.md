@@ -1,10 +1,22 @@
 # snmpfetch
 
-## Windows 11
-Settings > Apps > Optional features > Add an optional feature > "Simple Network Management Protocol (SNMP)"
-### Config
-Search "Services" > SNMP Service > Properties.
-Under Security Tab > Remove "Send authentication trap" and add a new community (mau22test) > Apply
-Then restart SNMP Services
+## About
+
+
+## Install on Ubuntu
+1. ```apt-get install snmp snmpd snmp-mibs-downloader```
+2. ```sed -i 's/mibs :/# mibs :/g' /etc/snmp/snmp.conf```
+3. Enable CPU and Memory Monitor
+
+## How to enable CPU and Memory Monitoring
+Add to ```/etc/snmp/snmpd.conf```<br>
+```sh
+view systemonly included .1.3.6.1.4.1.2021
+```
+and restart snmpd with
+```sh
+service snmpd restart
+```
+
 
 
