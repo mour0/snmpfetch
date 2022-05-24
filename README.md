@@ -4,7 +4,7 @@
 snmpfetch is a simple command-line program that uses the SNMP protocol to retrieve system information.  
 It sends GET requests to a host where the SNMP daemon is running, parses the data, and prints them.  
 
-[![asciicast](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt.png)](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt)
+[![asciicast](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt.svg)](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt)
 ---
 
 ## Installation
