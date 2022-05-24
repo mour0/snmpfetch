@@ -1,21 +1,5 @@
-    // https://campus.barracuda.com/product/websecuritygateway/doc/77401430/snmp-oid-s-for-cpu-memory-and-disk-statistics-on-linux/
-    // 1.3.6.1.2.1.25.3.3.1.2	hrProcessorLoad (The average, over the last minute, of the percentage of time that this processor was not idle. Implementations may approximate this one minute smoothing period if necessary.)
-    // 1.3.6.1.2.1.25.3.6.1.4	hrDiskStorageCapacity
-    // 1.3.6.1.2.1.25.2.3.1.3	hrStorageDescr
-    // 1.3.6.1.2.1.25.2.3.1.5	hrStorageSize
-    // 1.3.6.1.2.1.25.2.3.1.6	hrStorageUsed
-
-    // 1.3.6.1.2.1.25.4.2.1.1	hrSWRunIndex (pid?)
-    // 1.3.6.1.2.1.25.4.2.1.2	hrSWRunName (names)
-    // 1.3.6.1.2.1.25.6.3.1.2	hrSWInstalledName
-
-    // mem usata dal processo hrSWRunPerfMem	1.3.6.1.2.1.25.5.1.1.2
-    
-    // 1.3.6.1.2.1.2.2.1.2	ifDescr (interface desc)
-#![allow(unused_variables)]
-#![allow(unused_mut)]
 use clap::Parser;
-use std::time::Duration;
+use std::{time::Duration, process::exit};
 use snmp::{SyncSession, Value};
 
 #[derive(Parser)]
@@ -37,18 +21,39 @@ struct Args {
     #[clap(short, long, default_value="161")]
     port: u16,
 
+    /// RAM usage outliers
+    #[clap(short, long)]
+    threshold: Option<f64>,
 }
 
-//const SYS_DESCR: &[i32] = &[1,3,6,1,2,1,1,1,0]; //sysDesc.0
-/*
-fn print_snmp(str: &str,oid: &[u32],session: &mut SyncSession) 
-{
-    let mut response = session.get(oid).unwrap();
-    if let Some((_, Value::OctetString(sys_descr))) = response.varbinds.next() {
-        println!("{}: {}", str,String::from_utf8_lossy(sys_descr));
-    }
-}
-*/
+const SYS_DESCR: &[u32; 9] = &[1,3,6,1,2,1,1,1,0]; //sysDesc.0
+const SYS_NAME: &[u32; 9] = &[1,3,6,1,2,1,1,5,0]; //sysName.0
+const SYS_UPTIME: &[u32; 9] = &[1,3,6,1,2,1,1,3,0]; //sysUpTime.0 -  time (in hundredths of a second) since the network daemon of the system was last re-initialized
+const HR_SYSTEM_UPTIME: &[u32; 10] = &[1,3,6,1,2,1,25,1,1,0]; //hrSystemUptime.0 - measures the amount of time since the host was last initialized
+const HR_SYSTEM_PROCESSES: &[u32; 10] = &[1,3,6,1,2,1,25,1,6,0]; //hrSystemProcesses.0 - number of processes
+// Int wrapped
+const LA_LOAD: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,0]; // Bulk {...1,...2,...3} The average number of processes that are being executed by the CPU 
+//const LA_LOAD_1: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,1]; //laLoad.1 - The load average for the last minute.
+//const LA_LOAD_2: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,2]; //laLoad.2 - The load average for the last 5 minutes.
+//const LA_LOAD_3: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,3]; //laLoad.3- The load average for the last 15 minutes.
+
+const SS_CPU_NUM_CPUS: &[u32;10] = &[1,3,6,1,4,1,2021,11,67,0]; //ssCpu.0 - The number of CPUs in the system.
+const SS_CPU_RAW: &[u32; 9] = &[1,3,6,1,4,1,2021,11,49];  // Bulk {50.0,51.0,52.0}
+//const SS_CPU_RAW_USER: &[u32; 10] = &[1,3,6,1,4,1,2021,11,50,0]; //The percentage of CPU time spent processing user-level code
+//const SS_CPU_RAW_NICE: &[u32; 10] = &[1,3,6,1,4,1,2021,11,51,0]; //The percentage of CPU time spent processing low-priority code 
+//const SS_CPU_RAW_SYSTEM: &[u32; 10] = &[1,3,6,1,4,1,2021,11,52,0]; //The percentage of CPU time spent processing sys-level code
+//const SS_CPU_RAW_IDLE: &[u32; 10] = &[1,3,6,1,4,1,2021,11,53,0]; //Idle
+
+const MEM_TOTAL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,5,0]; //memTotalReal.0 - Total RAM (KBytes)
+const MEM_AVAIL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,6,0]; //memAvailReal.0 - Memory currently unused(KBytes)
+//const MEM_TOTAL_FREE: &[u32;10] = &[1,3,6,1,4,1,2021,4,11,0]; //memTotalFree.0 - Total amount of memory free or available for use on this host. (KBytes)
+
+
+//const SYS_CONTACT: [u32; 9]= &[1,3,6,1,2,1,1,4,0]; //sysName.0
+//const HR_DEVICE_TABLE: &[u32; 9] = &[1,3,6,1,2,1,25,3,2]; //hrDeviceTable - set of services that this entity may potentially offer (sum)
+
+//const HR_MEMORY_SIZE: &[u32; 10] = &[1,3,6,1,2,1,25,2,2,0]; //hrMemorySize.0 - RAM contained by the host. (KBytes)
+const HR_SW_RUN_PERF_MEM: &[u32; 12] = &[1,3,6,1,2,1,25,5,1,1,2,0]; //hrSWRunPerfMem - The total amount of real system memory allocated to a process.
 
 #[allow(unused_assignments)]
 fn sec_to_date(mut secs: u64) -> String {
@@ -85,34 +90,6 @@ fn sec_to_date(mut secs: u64) -> String {
     result
 }
 
-const SYS_DESCR: &[u32; 9] = &[1,3,6,1,2,1,1,1,0]; //sysDesc.0
-const SYS_NAME: &[u32; 9] = &[1,3,6,1,2,1,1,5,0]; //sysName.0
-const SYS_UPTIME: &[u32; 9] = &[1,3,6,1,2,1,1,3,0]; //sysUpTime.0 -  time (in hundredths of a second) since the network daemon of the system was last re-initialized
-const HR_SYSTEM_UPTIME: &[u32; 10] = &[1,3,6,1,2,1,25,1,1,0]; //hrSystemUptime.0 - measures the amount of time since the host was last initialized
-const HR_SYSTEM_PROCESSES: &[u32; 10] = &[1,3,6,1,2,1,25,1,6,0]; //hrSystemProcesses.0 - number of processes
-// Int wrapped
-const LA_LOAD: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,0]; // Bulk {...1,...2,...3}
-//const LA_LOAD_1: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,1]; //laLoad.1 - The load average for the last minute.
-//const LA_LOAD_2: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,2]; //laLoad.2 - The load average for the last 5 minutes.
-//const LA_LOAD_3: &[u32;11] = &[1,3,6,1,4,1,2021,10,1,5,3]; //laLoad.3- The load average for the last 15 minutes.
-
-const SS_CPU_NUM_CPUS: &[u32;10] = &[1,3,6,1,4,1,2021,11,67,0]; //ssCpu.0 - The number of CPUs in the system.
-const SS_CPU_RAW: &[u32; 9] = &[1,3,6,1,4,1,2021,11,49];  // Bulk {50.0,51.0,52.0}
-//const SS_CPU_RAW_USER: &[u32; 10] = &[1,3,6,1,4,1,2021,11,50,0]; //The percentage of CPU time spent processing user-level code
-//const SS_CPU_RAW_NICE: &[u32; 10] = &[1,3,6,1,4,1,2021,11,51,0]; //The percentage of CPU time spent processing low-priority code 
-//const SS_CPU_RAW_SYSTEM: &[u32; 10] = &[1,3,6,1,4,1,2021,11,52,0]; //The percentage of CPU time spent processing sys-level code
-//const SS_CPU_RAW_IDLE: &[u32; 10] = &[1,3,6,1,4,1,2021,11,53,0]; //Idle
-
-const MEM_TOTAL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,5,0]; //memTotalReal.0 - Total RAM (KBytes)
-const MEM_AVAIL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,6,0]; //memAvailReal.0 - Memory currently unused(KBytes)
-//const MEM_TOTAL_FREE: &[u32;10] = &[1,3,6,1,4,1,2021,4,11,0]; //memTotalFree.0 - Total amount of memory free or available for use on this host. (KBytes)
-
-
-//const SYS_CONTACT: [u32; 9]= &[1,3,6,1,2,1,1,4,0]; //sysName.0
-//const HR_DEVICE_TABLE: &[u32; 9] = &[1,3,6,1,2,1,25,3,2]; //hrDeviceTable - set of services that this entity may potentially offer (sum)
-
-//const HR_MEMORY_SIZE: &[u32; 10] = &[1,3,6,1,2,1,25,2,2,0]; //hrMemorySize.0 - RAM contained by the host. (KBytes)
-const HR_SW_RUN_PERF_MEM: &[u32; 12] = &[1,3,6,1,2,1,25,5,1,1,2,0]; //hrSWRunPerfMem - The total amount of real system memory allocated to a process.
 
 struct Process {
     pid: u32,
@@ -122,9 +99,16 @@ struct Process {
 fn zscore(session: &mut SyncSession,threshold: f64) -> u32
 {
     let mut process_number = 0;
-    let mut response = session.get(HR_SYSTEM_PROCESSES).unwrap();
+    let mut response = match session.get(HR_SYSTEM_PROCESSES)
+    {
+        Ok(r) => r,
+        Err(_) => {
+            eprintln!("The IP or community string is incorrect");
+            exit(1);
+        }
+    };
     if let Some((_, Value::Unsigned32(descr))) = response.varbinds.next() {
-        println!("hrSystemProcesses: {}",descr);
+        //println!("hrSystemProcesses: {}",descr);
         process_number = descr; 
     }
 
@@ -132,33 +116,34 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> u32
 
     let mut temp = HR_SW_RUN_PERF_MEM.clone(); 
     let mut sum: usize =0;
-    for n in 0..=process_number {
+    for _n in 0..process_number {
         response = session.getnext(&temp).unwrap();
         if let Some((_oid, Value::Integer(descr))) = response.varbinds.next() {
-            //println!("{} => {}: {}", n,_oid,sys_descr);
             temp[11] = _oid.to_string().split('.').last().unwrap().parse::<u32>().unwrap();
             sum += descr as usize;
             v.push(Process {
                 pid: temp[11],
                 score: descr as u32,
             });
+            //println!("{} {} {}",_n,temp[11],descr);
         }
     }
-    println!("hrSWRunPerfMem: {}",sum);
+    //println!("hrSWRunPerfMem: {}",sum);
 
     let average: f64 = sum as f64/ process_number as f64;
-    println!("average: {}",average);
+    //println!("average: {}",average);
     let variance: f64 = v.iter().map(|x| (x.score as f64 - average).powf(2.0)).sum::<f64>()/v.len() as f64;
-    println!("variance: {}",variance);
+    //println!("variance: {}",variance);
     let stddev: f64 = (variance as f64).sqrt();
-    println!("stddev: {}",stddev);
+    //println!("stddev: {}",stddev);
 
     let mut num_outliers: u32 =0;
     for n in 0..v.len()
     {
         let zscore = (v[n].score as f64 - average)/stddev;
+        //println!("{} {} {}",v[n].pid,v[n].score,zscore);
         if zscore > threshold || zscore < -threshold {
-            println!("{} => {}",v[n].pid,zscore);
+            println!("-> {{ PID({}) Memory-Allocated({} KB) }} is an outlier",v[n].pid,v[n].score);
             num_outliers += 1;
         }
     }
@@ -175,12 +160,24 @@ fn main() {
 
     let mut sess = SyncSession::new(agent_addr, community, Some(timeout), 0).unwrap();
 
+    // Z-Score
+    if args.threshold.is_some() == true
+    {
+        let threshold = args.threshold.unwrap();
+        let n_outliers = zscore(&mut sess,threshold);
+        if n_outliers == 0
+        {
+            println!("No outliers found");
+        }
+        exit(0);
+    }
+
     // --- Name ---
     let mut response = match sess.get(SYS_NAME) {
         Ok(r) => r,
         Err(_) => {
             eprintln!("The IP or community string is incorrect");
-            return;
+            exit(1);
         }
     };
     if let Some((_, Value::OctetString(descr))) = response.varbinds.next() {

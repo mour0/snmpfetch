@@ -11,14 +11,15 @@ It sends GET requests to a host where the SNMP daemon is running, parses the dat
 ### Ubuntu
 1. ```apt-get install snmp snmpd snmp-mibs-downloader```
 2. ```sed -i 's/mibs :/# mibs :/g' /etc/snmp/snmp.conf```
-3. [Enable UCD MIBs](#how-to-enable-ucd-mibs)
+3. [Enable MIBs](#how-to-enable-host-resourcesucd-mibs)
 
 ---
 
-## How to enable UCD MIBs
+## How to enable HOST-RESOURCES/UCD MIBs
 Add to `/etc/snmp/snmpd.conf`  
 ```
 view systemonly included .1.3.6.1.4.1.2021
+view systemonly included .1.3.6.1.2.1.25
 ```
 and restart snmpd with
 ```
