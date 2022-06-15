@@ -150,17 +150,17 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> u32
 
     num_outliers
 }
+
 fn main() {
     let args = Args::parse();
     let agent_addr = format!("{}:{}", args.host, args.port);
-    //let agent_addr = args.host + ":161";
     let community = args.community.as_bytes();
 
     let timeout       = Duration::from_secs(2);
 
     let mut sess = SyncSession::new(agent_addr, community, Some(timeout), 0).unwrap();
 
-    // Z-Score
+    // --- Z-Score ---
     if args.threshold.is_some() == true
     {
         let threshold = args.threshold.unwrap();
@@ -175,8 +175,8 @@ fn main() {
     // --- Name ---
     let mut response = match sess.get(SYS_NAME) {
         Ok(r) => r,
-        Err(_) => {
-            eprintln!("The IP or community string is incorrect");
+        Err(e) => {
+            eprintln!("SNMP Error: {:?}",e);
             exit(1);
         }
     };
@@ -186,36 +186,35 @@ fn main() {
     }
 
     // --- Description ---
-    response = sess.get(SYS_DESCR).unwrap();
+    response = sess.get(SYS_DESCR).expect("Error getting sysDescr");
     if let Some((_, Value::OctetString(descr))) = response.varbinds.next() {
         println!("sysDescr: {}",String::from_utf8_lossy(descr));
     }
 
-
     // --- Uptime ---
-    response = sess.get(SYS_UPTIME).unwrap();
+    response = sess.get(SYS_UPTIME).expect("Error getting sysUptime");
     if let Some((_, Value::Timeticks(descr))) = response.varbinds.next() {
         println!("sysUptime: {} ({})",sec_to_date((descr/100).into()),descr);
     }
 
-    response = sess.get(HR_SYSTEM_UPTIME).unwrap();
+    response = sess.get(HR_SYSTEM_UPTIME).expect("Error getting hrSystemUptime");
     if let Some((_, Value::Timeticks(descr))) = response.varbinds.next() {
         println!("hrSystemUptime: {} ({})",sec_to_date((descr/100).into()),descr);
     }
 
     // --- Processes ---
-    response = sess.get(HR_SYSTEM_PROCESSES).unwrap();
+    response = sess.get(HR_SYSTEM_PROCESSES).expect("Error getting hrSystemProcesses");
     if let Some((_, Value::Unsigned32(descr))) = response.varbinds.next() {
         println!("hrSystemProcesses: {}",descr);
     }
 
     // --- CPU ---
-    response = sess.get(SS_CPU_NUM_CPUS).unwrap();
+    response = sess.get(SS_CPU_NUM_CPUS).expect("Error getting ssCpuNumCpus");
     if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
         println!("ssNumCPUs: {}",descr);
     }
 
-    response = sess.getbulk(&[SS_CPU_RAW],0,4).unwrap();
+    response = sess.getbulk(&[SS_CPU_RAW],0,4).expect("Error getting ssCpuRaw");
     let mut cpu_usage = vec![0;4]; 
     let mut sum_cpu = 0;
     for i in 0..4 {
@@ -237,23 +236,26 @@ fn main() {
 
     // --- RAM ---
     let mut memory_size = 0;
-    response = sess.get(MEM_TOTAL_REAL).unwrap();
+    response = sess.get(MEM_TOTAL_REAL).expect("Error getting memTotalReal");
     if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
         println!("memTotal: {:.2} GB ({} KB)",descr as f64/(1024.0 * 1024.0),descr);
         memory_size = descr;
     }
-    response = sess.get(MEM_AVAIL_REAL).unwrap();
+    response = sess.get(MEM_AVAIL_REAL).expect("Error getting memAvailReal");
     if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
         let mem_used = memory_size - descr;
         println!("memUsed: {:.2} GB ({} KB) ({:.0}%)",mem_used as f64/(1024.0 * 1024.0),mem_used,(mem_used as f32/memory_size as f32)*100.0);
     }
 
     // --- Load --- 
-    response = sess.getbulk(&[LA_LOAD],0,3).unwrap();
-    println!("Loads:");
+    response = sess.getbulk(&[LA_LOAD],0,3).expect("Error getting laLoad");
     for n in [1,5,15]
     {
         if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
+            if n == 1
+            {
+                println!("Loads:");
+            }
             println!("|-> {}m: {}",n,descr);
         }
     }
