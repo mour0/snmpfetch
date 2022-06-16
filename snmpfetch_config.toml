@@ -1,0 +1,12 @@
+[contacts]
+webhook = ""
+
+[timings]
+# Seconds 
+webhook_pause = 3600 
+interval = 1
+
+[thresholds]
+used_mem = 80
+used_cpu_user = 60
+used_cpu_system = 60
