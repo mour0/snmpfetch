@@ -18,6 +18,8 @@ pub const SS_CPU_RAW: &[u32; 9] = &[1,3,6,1,4,1,2021,11,49];  // Bulk {50.0,51.0
 
 pub const MEM_TOTAL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,5,0]; //memTotalReal.0 - Total RAM (KBytes)
 pub const MEM_AVAIL_REAL: &[u32;10] = &[1,3,6,1,4,1,2021,4,6,0]; //memAvailReal.0 - Memory currently unused(KBytes)
+pub const MEM_BUFFER: &[u32;10] = &[1,3,6,1,4,1,2021,4,14,0]; //memBuffer.0 - Memory currently buffered(KBytes)
+pub const MEM_CACHED: &[u32;10] = &[1,3,6,1,4,1,2021,4,15,0]; //memCached.0 - Memory currently cached(KBytes)
 //pub const MEM_TOTAL_FREE: &[u32;10] = &[1,3,6,1,4,1,2021,4,11,0]; //memTotalFree.0 - Total amount of memory free or available for use on this host. (KBytes)
 
 

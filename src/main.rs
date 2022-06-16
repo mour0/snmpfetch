@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::{time::{Duration, Instant, UNIX_EPOCH}, process::exit, thread, io::{Stdout, stdout}};
+use std::{time::{Duration, Instant, UNIX_EPOCH}, process::exit, thread::{self, current}, io::{Stdout, stdout}};
 use snmp::{SyncSession, Value};
 use std::fs;
 use std::path::Path;
@@ -226,9 +226,26 @@ fn main() {
             println!("memTotal: {:.2} GB ({} KB)",descr as f64/(1024.0 * 1024.0),descr);
             memory_size = descr;
         }
+        
         response = sess.get(MEM_AVAIL_REAL).expect("Error getting memAvailReal");
+        let mut current_free = 0;
         if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
-            let mem_used = memory_size - descr;
+            current_free = descr;
+            dbg!(current_free);
+        }
+
+
+        response = sess.get(MEM_CACHED).expect("Error getting memAvailReal");
+        let mut current_cached = 0;
+        if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
+            current_cached = descr;
+            dbg!(current_free);
+        }
+
+        response = sess.get(MEM_BUFFER).expect("Error getting memBuffered");
+        if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
+            dbg!(descr);
+            let mem_used = memory_size - (descr+current_free+current_cached);
             let mem_perc = (mem_used as f32/memory_size as f32)*100.0;
 
             if args.to_loop && mem_perc > config_toml.thresholds.used_mem as f32
@@ -240,7 +257,7 @@ fn main() {
                 }
             }
             println!("memUsed: {:.2} GB ({} KB) ({:.1}%)",mem_used as f64/(1024.0 * 1024.0),mem_used,mem_perc);
-        }
+        } 
 
         // --- Load --- 
         response = sess.getbulk(&[LA_LOAD],0,3).expect("Error getting laLoad");

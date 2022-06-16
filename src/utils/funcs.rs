@@ -80,7 +80,7 @@ pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
     let diff = now.duration_since(origin_secs);
     let diff_secs = diff.as_secs();
     dbg!(diff_secs);
-    if diff_secs > threshhold {
+    if diff_secs >= threshhold {
         return true;
     }
     else {
@@ -88,6 +88,7 @@ pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
     } 
 }
 
+//todo!("ALERT BASED ON LOAD AND NOT ON MEM USAGE");
 
 #[allow(unused_assignments)]
 pub fn sec_to_date(mut secs: u64) -> String {
