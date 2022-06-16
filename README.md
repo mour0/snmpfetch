@@ -9,7 +9,7 @@ It sends GET requests to a host where the SNMP daemon is running, parses the dat
 
 ## Installation
 ### Ubuntu
-1. ```apt-get install snmp snmpd snmp-mibs-downloader```
+1. ```apt-get install snmp snmpd snmp-mibs-downloader libssl-dev```
 2. ```sed -i 's/mibs :/# mibs :/g' /etc/snmp/snmp.conf```
 3. [Enable MIBs](#how-to-enable-host-resourcesucd-mibs)
 
