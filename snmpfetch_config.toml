@@ -1,12 +1,13 @@
 [contacts]
 webhook = ""
-
+    
 [timings]
-# Seconds 
-webhook_pause = 3600 
+# Seconds to wait
+webhook_pause = 3600
 interval = 1
 
 [thresholds]
+# Percentage of used memory
 used_mem = 80
-used_cpu_user = 60
-used_cpu_system = 60
+# Load 1 minute value
+load_1m = 500

@@ -1,5 +1,6 @@
 
-use std::{fs::File, io::Write, collections::HashMap, time::Instant};
+use std::{fs::File, io::{Write, Stdout}, collections::HashMap, time::Instant};
+use crossterm::{terminal::{Clear, ClearType}, ExecutableCommand, cursor::MoveTo};
 use serde_derive::Deserialize;
 use reqwest::blocking::Client;
 
@@ -12,11 +13,11 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,used_cpu_user:u8,used_cpu_system:u8) -> Config {
+    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,load_1m: u32) -> Config {
         Config { 
             contacts: Contacts { webhook}, 
             timings: Timings { webhook_pause, interval},
-            thresholds: Thresholds {used_mem, used_cpu_user, used_cpu_system},
+            thresholds: Thresholds {used_mem, load_1m},
         }
     }
 }
@@ -39,8 +40,7 @@ pub struct Timings {
 #[derive(Debug)]
 pub struct Thresholds {
     pub used_mem: u8,
-    pub used_cpu_user: u8,
-    pub used_cpu_system: u8,
+    pub load_1m: u32,
 }
 
 pub fn send_post(desc: String,url:&str) {
@@ -62,24 +62,24 @@ pub fn create_default_toml()
 {
     let mut file = File::create("snmpfetch_config.toml").unwrap();
     file.write_all(b"[contacts]
-    webhook = \"\"
+webhook = \"\"
     
-    [timings]
-    webhook_pause = 3600
-    interval = 1
+[timings]
+# Seconds to wait
+webhook_pause = 3600
+interval = 1
 
-    [thresholds]
-    used_mem = 80
-    used_cpu_user = 60
-    used_cpu_system = 60
-    ").unwrap();
+[thresholds]
+# Percentage of used memory
+used_mem = 80
+# Load 1 minute value
+load_1m = 500").unwrap();
 }
 
 pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
     let now = Instant::now();
     let diff = now.duration_since(origin_secs);
     let diff_secs = diff.as_secs();
-    dbg!(diff_secs);
     if diff_secs >= threshhold {
         return true;
     }
@@ -88,7 +88,20 @@ pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
     } 
 }
 
-//todo!("ALERT BASED ON LOAD AND NOT ON MEM USAGE");
+pub fn cls(stdout:&mut Stdout)
+{
+    match stdout.execute(Clear(ClearType::All))
+    {
+        Ok(_) => {
+            match stdout.execute(MoveTo(0,0))
+            {
+                _ => (),
+            }
+        },
+        Err(_) => eprintln!("Error clearing screen"),
+    }
+}
+
 
 #[allow(unused_assignments)]
 pub fn sec_to_date(mut secs: u64) -> String {

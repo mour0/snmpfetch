@@ -1,11 +1,9 @@
-use clap::Parser;
-use std::{time::{Duration, Instant, UNIX_EPOCH}, process::exit, thread::{self, current}, io::{Stdout, stdout}};
+use clap::{Parser,ArgGroup};
+use std::{time::{Duration, Instant}, process::exit, io::stdout, thread};
 use snmp::{SyncSession, Value};
 use std::fs;
 use std::path::Path;
 use toml;
-use crossterm::{terminal::*, ExecutableCommand, cursor::*};
-
 
 mod utils;
 use crate::utils::{funcs::*,constants::*};
@@ -15,6 +13,8 @@ use crate::utils::{funcs::*,constants::*};
     version="1.0", 
     about="SNMP", 
     long_about = None)]
+
+#[clap(group(ArgGroup::new("exclusive").args(&["to-loop","threshold"]),))]
 struct Args {
 
     /// IP address
@@ -107,24 +107,37 @@ fn main() {
 
     let mut sess = SyncSession::new(agent_addr, community, Some(timeout), 0).unwrap();
     let mut now = Instant::now();
-    
 
+    let mut stdout = stdout();
+
+    
     // --- Configs --- 
     let config_toml: Config;
     if Path::new("snmpfetch_config.toml").is_file()
     {
         let content = fs::read_to_string("snmpfetch_config.toml").unwrap();
-        config_toml = toml::from_str(&content).unwrap();
-
+        config_toml = match toml::from_str(&content)
+        {
+            Ok(c) => c,
+            Err(_) => {
+                eprintln!("Error parsing config file");
+                exit(1);
+            }
+        };
     }
     else 
     {
         create_default_toml();
-        config_toml = Config::new("".to_string(), 3600, 1,80,60,60);
+        config_toml = Config::new("".to_string(), 3600, 1,80,500);
     }
     now = now.checked_sub(Duration::from_secs(config_toml.timings.webhook_pause)).unwrap();
 
+    if args.to_loop { cls(&mut stdout); }
+
     loop {
+
+
+
         // --- Z-Score ---
         if args.threshold.is_some() == true
         {
@@ -138,6 +151,7 @@ fn main() {
         }
 
 
+        let mut msg: String = String::from(""); 
 
         // --- Name ---
         let mut response = match sess.get(SYS_NAME) {
@@ -201,24 +215,8 @@ fn main() {
             println!("|-> System: {:.2}%",system);
             println!("|-> Idle: {:.2}%",cpu_usage[3] as f32/sum_cpu as f32*100.0);
 
-            if args.to_loop && user > config_toml.thresholds.used_cpu_user as f32
-            {
-                if check_time_passed(now, config_toml.timings.webhook_pause)
-                {
-                    send_post(format!("CPU spent (User): {:.2}%",user), &config_toml.contacts.webhook);
-                    now = Instant::now();
-                }
-            }
-            if args.to_loop && system > config_toml.thresholds.used_cpu_system as f32
-            {
-                if check_time_passed(now, config_toml.timings.webhook_pause)
-                {
-                    send_post(format!("CPU spent (User): {:.2}%",user), &config_toml.contacts.webhook);
-                    now = Instant::now();
-                }
-            }
         }
-
+        
         // --- RAM ---
         let mut memory_size = 0;
         response = sess.get(MEM_TOTAL_REAL).expect("Error getting memTotalReal");
@@ -231,33 +229,27 @@ fn main() {
         let mut current_free = 0;
         if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
             current_free = descr;
-            dbg!(current_free);
+
         }
 
-
-        response = sess.get(MEM_CACHED).expect("Error getting memAvailReal");
+        response = sess.get(MEM_CACHED).expect("Error getting memCached");
         let mut current_cached = 0;
         if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
             current_cached = descr;
-            dbg!(current_free);
         }
 
-        response = sess.get(MEM_BUFFER).expect("Error getting memBuffered");
+        response = sess.get(MEM_BUFFER).expect("Error getting memBuffer");
         if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
-            dbg!(descr);
             let mem_used = memory_size - (descr+current_free+current_cached);
             let mem_perc = (mem_used as f32/memory_size as f32)*100.0;
 
             if args.to_loop && mem_perc > config_toml.thresholds.used_mem as f32
             {
-                if check_time_passed(now, config_toml.timings.webhook_pause)
-                {
-                    send_post(format!("Memory Used: {} GB ({:.1}%)",mem_used,mem_perc), &config_toml.contacts.webhook);
-                    now = Instant::now();
-                }
+                msg.push_str(format!("Memory Used: {} GB ({:.1}%)",mem_used,mem_perc).as_str());
             }
             println!("memUsed: {:.2} GB ({} KB) ({:.1}%)",mem_used as f64/(1024.0 * 1024.0),mem_used,mem_perc);
         } 
+
 
         // --- Load --- 
         response = sess.getbulk(&[LA_LOAD],0,3).expect("Error getting laLoad");
@@ -267,6 +259,10 @@ fn main() {
                 if n == 1
                 {
                     println!("Loads:");
+                    if args.to_loop && (descr as u32 > config_toml.thresholds.load_1m)
+                    {
+                        msg.push_str(format!("Load 1m: {}",descr).as_str());
+                    }
                 }
                 println!("|-> {}m: {}",n,descr);
             }
@@ -274,13 +270,13 @@ fn main() {
 
         if !args.to_loop { break; }
 
-        thread::sleep(Duration::from_secs(config_toml.timings.interval));
-        let mut stdout = stdout();
-        match stdout.execute(Clear(ClearType::All))
+        if msg.len() > 0 && check_time_passed(now, config_toml.timings.webhook_pause)
         {
-            Ok(_) => {stdout.execute(MoveTo(0,0));},
-            Err(_) => (panic!("WTF")),
+            send_post(msg, &config_toml.contacts.webhook);
         }
+
+        thread::sleep(Duration::from_secs(config_toml.timings.interval));
+        cls(&mut stdout);
     }
 
 }
