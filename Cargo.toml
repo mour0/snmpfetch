@@ -13,3 +13,7 @@ serde = "1.0.137"
 serde_derive = "1.0.137"
 reqwest = { version = "0.11.11", features = ["blocking","json"] }
 crossterm = "0.23.2"
+
+chrono = "0.4.19"
+influxdb = { version = "0.5.2", features = ["derive"] }
+tokio = { version = "1.19.2", features = ["macros"] }

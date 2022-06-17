@@ -1,9 +1,13 @@
-use clap::{Parser,ArgGroup};
+use clap::{Parser};
 use std::{time::{Duration, Instant}, process::exit, io::stdout, thread};
 use snmp::{SyncSession, Value};
 use std::fs;
 use std::path::Path;
 use toml;
+
+
+use influxdb::Client as InfluxClient;
+use chrono::Utc;
 
 mod utils;
 use crate::utils::{funcs::*,constants::*};
@@ -14,7 +18,6 @@ use crate::utils::{funcs::*,constants::*};
     about="SNMP", 
     long_about = None)]
 
-#[clap(group(ArgGroup::new("exclusive").args(&["to-loop","threshold"]),))]
 struct Args {
 
     /// IP address
@@ -41,7 +44,8 @@ struct Process {
     pid: u32,
     score: u32,
 }
-fn zscore(session: &mut SyncSession,threshold: f64) -> u32
+
+fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
 {
     let mut process_number = 0;
     let mut response = match session.get(HR_SYSTEM_PROCESSES)
@@ -81,19 +85,24 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> u32
     //println!("variance: {}",variance);
     let stddev: f64 = (variance as f64).sqrt();
     //println!("stddev: {}",stddev);
-
-    let mut num_outliers: u32 =0;
+    let mut v_outliers: Vec<Process>= vec![];
+    print!("Outliers: ");
+    if v.is_empty()
+    {
+        println!("None");
+    }
     for n in 0..v.len()
     {
         let zscore = (v[n].score as f64 - average)/stddev;
         //println!("{} {} {}",v[n].pid,v[n].score,zscore);
         if zscore > threshold || zscore < -threshold {
-            println!("-> {{ PID({}) Memory-Allocated({} KB) }} is an outlier",v[n].pid,v[n].score);
-            num_outliers += 1;
+            println!("-> {{ PID({}) Memory-Allocated({} KB) }}",v[n].pid,v[n].score);
+            // todo!("clone")
+            v_outliers.push(Process { pid: v[n].pid, score: v[n].score }); 
         }
     }
 
-    num_outliers
+    v_outliers
 }
 
 
@@ -110,6 +119,7 @@ fn main() {
 
     let mut stdout = stdout();
 
+    // TODO set in config ifle
     
     // --- Configs --- 
     let config_toml: Config;
@@ -128,27 +138,19 @@ fn main() {
     else 
     {
         create_default_toml();
-        config_toml = Config::new("".to_string(), 3600, 1,80,500);
+        config_toml = Config::new("".to_string(), 3600, 1,80,500,"http://localhost:8086".to_string(),"mydb".to_string());
     }
+
+    let client = InfluxClient::new(config_toml.database.url, &config_toml.database.influxdb_name);
     now = now.checked_sub(Duration::from_secs(config_toml.timings.webhook_pause)).unwrap();
 
+    let url = gen_url(&config_toml.database.influxdb_name);
     if args.to_loop { cls(&mut stdout); }
 
     loop {
 
 
 
-        // --- Z-Score ---
-        if args.threshold.is_some() == true
-        {
-            let threshold = args.threshold.unwrap();
-            let n_outliers = zscore(&mut sess,threshold);
-            if n_outliers == 0
-            {
-                println!("No outliers found");
-            }
-            exit(0);
-        }
 
 
         let mut msg: String = String::from(""); 
@@ -243,9 +245,13 @@ fn main() {
             let mem_used = memory_size - (descr+current_free+current_cached);
             let mem_perc = (mem_used as f32/memory_size as f32)*100.0;
 
-            if args.to_loop && mem_perc > config_toml.thresholds.used_mem as f32
+            let reading = ValueReading{ time: Utc::now(), value: mem_perc as u32 };
+            if args.to_loop 
             {
-                msg.push_str(format!("Memory Used: {} GB ({:.1}%)",mem_used,mem_perc).as_str());
+                write_to_db(&client, reading, "memory_used_percentage");
+                if mem_perc > config_toml.thresholds.used_mem as f32 {
+                    msg.push_str(format!("Memory Used: {} GB ({:.1}%)\n",mem_used,mem_perc).as_str());
+                }
             }
             println!("memUsed: {:.2} GB ({} KB) ({:.1}%)",mem_used as f64/(1024.0 * 1024.0),mem_used,mem_perc);
         } 
@@ -258,21 +264,55 @@ fn main() {
             if let Some((_, Value::Integer(descr))) = response.varbinds.next() {
                 if n == 1
                 {
+                    let reading = ValueReading{ time: Utc::now(), value: descr as u32 };
                     println!("Loads:");
-                    if args.to_loop && (descr as u32 > config_toml.thresholds.load_1m)
+                    if args.to_loop
                     {
-                        msg.push_str(format!("Load 1m: {}",descr).as_str());
+                        write_to_db(&client, reading, "cpu_load_1m");
+                        if descr as u32 > config_toml.thresholds.load_1m
+                        {
+                            msg.push_str(format!("Load 1m: {}\n",descr).as_str());
+                        }
                     }
                 }
                 println!("|-> {}m: {}",n,descr);
             }
         }
 
+        // --- Z-Score ---
+        if args.threshold.is_some() == true
+        {
+            let threshold = args.threshold.unwrap();
+            let n_outliers = zscore(&mut sess,threshold);
+            if !n_outliers.is_empty()
+            {
+                msg.push_str("Outliers: [");
+            }
+            for i in 0..n_outliers.len()
+            {
+                msg.push_str(format!(" {{ PID({}) Memory-Allocated({} KB) }}",n_outliers[i].pid,n_outliers[i].score).as_str());
+                if i != n_outliers.len()-1
+                {
+                    msg.push_str(",");
+                }
+            }
+            msg.push_str("]\n");
+        }
+
         if !args.to_loop { break; }
 
-        if msg.len() > 0 && check_time_passed(now, config_toml.timings.webhook_pause)
+        if msg.len() > 0 && !config_toml.contacts.webhook.is_empty() && check_time_passed(now, config_toml.timings.webhook_pause)
         {
-            send_post(msg, &config_toml.contacts.webhook);
+            msg.push_str(format!("[Graphs](http://{}:3000/{})\n",args.host,url).as_str());
+            match send_post(msg, &config_toml.contacts.webhook)
+            {
+                Ok(_) => {
+                    now = Instant::now();
+                }
+                Err(_) => {
+                    eprintln!("Error sending webhook");
+                }
+            }
         }
 
         thread::sleep(Duration::from_secs(config_toml.timings.interval));

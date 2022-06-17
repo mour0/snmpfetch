@@ -11,3 +11,7 @@ interval = 1
 used_mem = 80
 # Load 1 minute value
 load_1m = 500
+
+[database]
+url = http://localhost:8086
+influxdb_name = test

@@ -4,20 +4,27 @@ use crossterm::{terminal::{Clear, ClearType}, ExecutableCommand, cursor::MoveTo}
 use serde_derive::Deserialize;
 use reqwest::blocking::Client;
 
+use influxdb::Client as InfluxClient;
+use influxdb::InfluxDbWriteable;
+use chrono::{DateTime, Utc};
+
+
 #[derive(Deserialize)]
 #[derive(Debug)]
 pub struct Config {
     pub contacts: Contacts,
     pub timings: Timings,
     pub thresholds: Thresholds,
+    pub database: Database,
 }
 
 impl Config {
-    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,load_1m: u32) -> Config {
+    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,load_1m: u32, url: String, influxdb_name: String) -> Config {
         Config { 
-            contacts: Contacts { webhook}, 
-            timings: Timings { webhook_pause, interval},
-            thresholds: Thresholds {used_mem, load_1m},
+            contacts: Contacts { webhook }, 
+            timings: Timings { webhook_pause, interval },
+            thresholds: Thresholds { used_mem, load_1m },
+            database: Database { url, influxdb_name }
         }
     }
 }
@@ -43,7 +50,16 @@ pub struct Thresholds {
     pub load_1m: u32,
 }
 
-pub fn send_post(desc: String,url:&str) {
+
+#[derive(Deserialize)]
+#[derive(Debug)]
+pub struct Database {
+    pub url: String,
+    pub influxdb_name: String,
+}
+
+
+pub fn send_post(desc: String,url:&str) -> Result<reqwest::blocking::Response,reqwest::Error>{
     let mut map = HashMap::new();
     map.insert("content", desc);
 
@@ -52,10 +68,7 @@ pub fn send_post(desc: String,url:&str) {
         .json(&map)
         .send();
 
-    if resp.is_err() {
-        eprintln!("Error sending POST request");
-    }
-    
+   resp 
 }
 
 pub fn create_default_toml()
@@ -73,7 +86,11 @@ interval = 1
 # Percentage of used memory
 used_mem = 80
 # Load 1 minute value
-load_1m = 500").unwrap();
+load_1m = 500
+
+[database]
+url = http://localhost:8086
+influxdb_name = test").unwrap();
 }
 
 pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
@@ -136,4 +153,28 @@ pub fn sec_to_date(mut secs: u64) -> String {
     result.push_str(&format!("{}s", seconds));
 
     result
+}
+
+
+#[derive(InfluxDbWriteable)]
+pub struct ValueReading {
+    pub time: DateTime<Utc>,
+    pub value: u32,
+}
+
+#[tokio::main]
+pub async fn write_to_db(client:&InfluxClient, data:ValueReading, table_name: &str)
+{
+
+    let result = client.query(data.into_query(table_name)).await; 
+    match result
+    {
+        Ok(_) => (),
+        Err(_) => eprintln!("Error writing to the Database"),
+    }
+}
+
+pub fn gen_url(db_name:&String) -> String
+{
+    format!("explore?orgId=1&left=%7B%22datasource%22:%22{}%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22policy%22:%22default%22,%22resultFormat%22:%22time_series%22,%22orderByTime%22:%22ASC%22,%22tags%22:%5B%5D,%22groupBy%22:%5B%7B%22type%22:%22time%22,%22params%22:%5B%2210s%22%5D%7D,%7B%22type%22:%22fill%22,%22params%22:%5B%22null%22%5D%7D%5D,%22select%22:%5B%5B%7B%22type%22:%22field%22,%22params%22:%5B%22value%22%5D%7D,%7B%22type%22:%22mean%22,%22params%22:%5B%5D%7D%5D%5D,%22measurement%22:%22cpu_load_1m%22%7D,%7B%22refId%22:%22B%22,%22policy%22:%22default%22,%22resultFormat%22:%22time_series%22,%22orderByTime%22:%22ASC%22,%22tags%22:%5B%5D,%22groupBy%22:%5B%7B%22type%22:%22time%22,%22params%22:%5B%2210s%22%5D%7D,%7B%22type%22:%22fill%22,%22params%22:%5B%22null%22%5D%7D%5D,%22select%22:%5B%5B%7B%22type%22:%22field%22,%22params%22:%5B%22value%22%5D%7D,%7B%22type%22:%22mean%22,%22params%22:%5B%5D%7D%5D%5D,%22measurement%22:%22memory_used_percentage%22%7D%5D,%22range%22:%7B%22from%22:%22now-5m%22,%22to%22:%22now%22%7D%7D",db_name)
 }
