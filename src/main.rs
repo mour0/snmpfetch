@@ -87,10 +87,6 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
     //println!("stddev: {}",stddev);
     let mut v_outliers: Vec<Process>= vec![];
     print!("Outliers: ");
-    if v.is_empty()
-    {
-        println!("None");
-    }
     for n in 0..v.len()
     {
         let zscore = (v[n].score as f64 - average)/stddev;
@@ -100,6 +96,10 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
             // todo!("clone")
             v_outliers.push(Process { pid: v[n].pid, score: v[n].score }); 
         }
+    }
+    if v_outliers.is_empty()
+    {
+        println!("None");
     }
 
     v_outliers
@@ -138,10 +138,10 @@ fn main() {
     else 
     {
         create_default_toml();
-        config_toml = Config::new("".to_string(), 3600, 1,80,500,"http://localhost:8086".to_string(),"mydb".to_string());
+        config_toml = Config::new(String::from(""), 3600, 1,80,500,String::from("http://localhost:8086"),String::from("test"),String::from("http://localhost:3000"));
     }
 
-    let client = InfluxClient::new(config_toml.database.url, &config_toml.database.influxdb_name);
+    let client = InfluxClient::new(config_toml.database.influxdb_url, &config_toml.database.influxdb_name);
     now = now.checked_sub(Duration::from_secs(config_toml.timings.webhook_pause)).unwrap();
 
     let url = gen_url(&config_toml.database.influxdb_name);
@@ -303,7 +303,7 @@ fn main() {
 
         if msg.len() > 0 && !config_toml.contacts.webhook.is_empty() && check_time_passed(now, config_toml.timings.webhook_pause)
         {
-            msg.push_str(format!("[Graphs](http://{}:3000/{})\n",args.host,url).as_str());
+            msg.push_str(format!("[Graphs]({}/{})\n",config_toml.database.grafana_url,url).as_str());
             match send_post(msg, &config_toml.contacts.webhook)
             {
                 Ok(_) => {

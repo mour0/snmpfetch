@@ -19,12 +19,12 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,load_1m: u32, url: String, influxdb_name: String) -> Config {
+    pub fn new(webhook: String, webhook_pause:u64,interval:u64,used_mem:u8,load_1m: u32, influxdb_url: String, influxdb_name: String, grafana_url: String) -> Config {
         Config { 
             contacts: Contacts { webhook }, 
             timings: Timings { webhook_pause, interval },
             thresholds: Thresholds { used_mem, load_1m },
-            database: Database { url, influxdb_name }
+            database: Database { influxdb_url, influxdb_name, grafana_url }
         }
     }
 }
@@ -54,8 +54,9 @@ pub struct Thresholds {
 #[derive(Deserialize)]
 #[derive(Debug)]
 pub struct Database {
-    pub url: String,
+    pub influxdb_url: String,
     pub influxdb_name: String,
+    pub grafana_url: String,
 }
 
 
@@ -78,8 +79,9 @@ pub fn create_default_toml()
 webhook = \"\"
     
 [timings]
-# Seconds to wait
+# Seconds to wait before sending webhook
 webhook_pause = 3600
+# Seconds between snmpfetch executions
 interval = 1
 
 [thresholds]
@@ -89,8 +91,9 @@ used_mem = 80
 load_1m = 500
 
 [database]
-url = http://localhost:8086
-influxdb_name = test").unwrap();
+influxdb_url = \"http://localhost:8086\"
+influxdb_name = \"test\"
+grafana_url = \"http://localhost:3000\"").unwrap();
 }
 
 pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {
@@ -169,8 +172,7 @@ pub async fn write_to_db(client:&InfluxClient, data:ValueReading, table_name: &s
     let result = client.query(data.into_query(table_name)).await; 
     match result
     {
-        Ok(_) => (),
-        Err(_) => eprintln!("Error writing to the Database"),
+        Ok(_) | Err(_) => (),//eprintln!("Error writing to the Database"),
     }
 }
 
