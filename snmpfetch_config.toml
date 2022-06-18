@@ -2,8 +2,9 @@
 webhook = ""
     
 [timings]
-# Seconds to wait
+# Seconds to wait before sending webhook
 webhook_pause = 3600
+# Seconds between snmpfetch executions
 interval = 1
 
 [thresholds]
@@ -13,5 +14,6 @@ used_mem = 80
 load_1m = 500
 
 [database]
-url = http://localhost:8086
-influxdb_name = test
+influxdb_url = "http://localhost:8086"
+influxdb_name = "test"
+grafana_url = "http://localhost:3000"
