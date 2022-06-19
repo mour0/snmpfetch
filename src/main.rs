@@ -92,7 +92,7 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
         let zscore = (v[n].score as f64 - average)/stddev;
         //println!("{} {} {}",v[n].pid,v[n].score,zscore);
         if zscore > threshold || zscore < -threshold {
-            println!("-> {{ PID({}) Memory-Allocated({} KB) }}",v[n].pid,v[n].score);
+            print!("\n|-> {{ PID({}) Memory-Allocated({} KB) }}",v[n].pid,v[n].score);
             // todo!("clone")
             v_outliers.push(Process { pid: v[n].pid, score: v[n].score }); 
         }
@@ -303,7 +303,7 @@ fn main() {
 
         if msg.len() > 0 && !config_toml.contacts.webhook.is_empty() && check_time_passed(now, config_toml.timings.webhook_pause)
         {
-            msg.push_str(format!("[Graphs]({}/{})\n",config_toml.database.grafana_url,url).as_str());
+            msg.push_str(format!("[Graphs]({}/{})\n---\n",config_toml.database.grafana_url,url).as_str());
             match send_post(msg, &config_toml.contacts.webhook)
             {
                 Ok(_) => {

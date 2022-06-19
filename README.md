@@ -1,49 +1,50 @@
 #  snmpfetch
 
-[![License](https://img.shields.io/github/license/mour0/snmpfetch?style=for-the-badge)](https://github.com/mour0/snmpfetch/blob/main/LICENSE) [![os](https://img.shields.io/badge/ubuntu-v20.04.4%20LTS-orange?style=for-the-badge)]()
+[![License](https://img.shields.io/github/license/mour0/snmpfetch?style=for-the-badge)](https://github.com/mour0/snmpfetch/blob/main/LICENSE) [![os](https://img.shields.io/badge/ubuntu-v20.04.4%20LTS-orange?style=for-the-badge)](https://releases.ubuntu.com/20.04.4/)
 
 
 ## About 📄
 snmpfetch is a simple command-line program that uses the SNMP protocol to retrieve system information.  
 It sends GET requests to a host where the SNMP daemon is running, parses the data, and prints them.  
 
-[![asciicast](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt.svg)](https://asciinema.org/a/LjwGWGZPLLV98vQmmpPPBgczt)
+[![asciicast](https://asciinema.org/a/gQ8CgQV5ISiY3EJv3yewz0pZ5.svg)](https://asciinema.org/a/gQ8CgQV5ISiY3EJv3yewz0pZ5)
 ---
 
 ## Installation 🧰
 ### Ubuntu
 1. [Install Rust](https://www.rust-lang.org/tools/install)
-2. ```apt-get install snmp snmpd snmp-mibs-downloader libssl-dev```
-3. ```sed -i 's/mibs :/# mibs :/g' /etc/snmp/snmp.conf```
+2. `apt-get install snmp snmpd snmp-mibs-downloader libssl-dev`
+3. `sed -i 's/mibs :/# mibs :/g' /etc/snmp/snmp.conf`
 4. Add to `/etc/snmp/snmpd.conf` :
 ```
 view systemonly included .1.3.6.1.4.1.2021
 view systemonly included .1.3.6.1.2.1.25
 ```
 5.  Run `service snmpd restart`
-6. ```git clone https://github.com/mour0/snmpfetch.git```
-7. ```cd snmpfetch/```
-8. ```cargo build --release```
-9. ```./snmpfetch 127.0.0.1```
+6. `git clone https://github.com/mour0/snmpfetch.git`
+7. `cd snmpfetch/`
+8. `cargo build --release`
+9. `cd target/release/`
+10. `./snmpfetch 127.0.0.1`
 
-## Tests 🥼
+## Testing 🥼
 ### Readings
-- **sysName** and **sysDescr** they can be retrieved using the commands `uname -n` and `uname -a`
-- **hrSystemUptime** using the command `uptime -p`
+- **sysName** and **sysDescr** can be retrieved using commands `uname -n` and `uname -a`
+- **hrSystemUptime** using command `uptime -p`
 - **hrSystremProcesses** by `ps aux`
 - **cpuUsage** by `iostat`
 - **memTotal** and **memUsed** by `free`
-- **Loads** by `top`. The value showed by `top` is divided by 100
+- **Loads** by `top`. (`top` shows values divided by 100) 
 
 ### Notifications
-To check if notifications are correctly sent, we can use `stress` and we must reduce the threshold values in the config file accordingly.  
+To check if notifications are correctly sent, `stress` can be used, but it might be necessary to reduce thresholds.
 The tool can be installed using `apt-get install stress`
 
 #### Example
-Edit the following snmpfetch_config.toml fields
+Edit the following `snmpfetch_config.toml` fields
 ```toml
 [contacts]
-# If you want to receive notifications set ur URL
+# If notifications are needed, set an URL
 webhook = "<URL>"
     
 [timings]
@@ -65,8 +66,10 @@ grafana_url = "http://localhost:3000"
 ```
 1. Run the command `stress --cpu 4 --vm 2 --vm-bytes 512M &` 
 2. Run `./snmpfetch 127.0.0.1 -t 2.5 -L`
-3. Check if you receive any type of notification in ur webhook channel and stop `snmpfetch`
+3. Check notifications in your webhook channel and stop `snmpfetch`
+![image-notification](https://user-images.githubusercontent.com/80765753/174458684-5c156bb5-d161-4ef5-ace5-5492549c4f75.png)
 4. Terminate `stress`
+![image-graph](https://user-images.githubusercontent.com/80765753/174457638-adc6bbb8-400d-4e00-ad16-ecfe754ee6d8.png)
 
 ## FAQs ❓
 ### How to install Grafana and InfluxDB 1.8 
