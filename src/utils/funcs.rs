@@ -74,7 +74,7 @@ pub fn send_post(desc: String,url:&str) -> Result<reqwest::blocking::Response,re
 
 pub fn create_default_toml()
 {
-    let mut file = File::create("snmpfetch_config.toml").unwrap();
+    let mut file = File::create("snmpfetch_config.toml").expect("Unable to create file");
     file.write_all(b"[contacts]
 webhook = \"\"
     
@@ -93,7 +93,7 @@ load_1m = 500
 [database]
 influxdb_url = \"http://localhost:8086\"
 influxdb_name = \"test\"
-grafana_url = \"http://localhost:3000\"").unwrap();
+grafana_url = \"http://localhost:3000\"").expect("Unable to write to file");
 }
 
 pub fn check_time_passed(origin_secs: Instant, threshhold: u64) -> bool {

@@ -66,7 +66,7 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
     let mut temp = HR_SW_RUN_PERF_MEM.clone(); 
     let mut sum: usize =0;
     for _n in 0..process_number {
-        response = session.getnext(&temp).unwrap();
+        response = session.getnext(&temp).expect("Error getting hrSWRunPerfMem");
         if let Some((_oid, Value::Integer(descr))) = response.varbinds.next() {
             temp[11] = _oid.to_string().split('.').last().unwrap().parse::<u32>().unwrap();
             sum += descr as usize;
@@ -86,13 +86,13 @@ fn zscore(session: &mut SyncSession,threshold: f64) -> Vec<Process>
     let stddev: f64 = (variance as f64).sqrt();
     //println!("stddev: {}",stddev);
     let mut v_outliers: Vec<Process>= vec![];
-    print!("Outliers: ");
+    println!("Outliers: ");
     for n in 0..v.len()
     {
         let zscore = (v[n].score as f64 - average)/stddev;
         //println!("{} {} {}",v[n].pid,v[n].score,zscore);
         if zscore > threshold || zscore < -threshold {
-            print!("\n|-> {{ PID({}) Memory-Allocated({} KB) }}",v[n].pid,v[n].score);
+            println!("|-> {{ PID({}) Memory-Allocated({} KB) }}",v[n].pid,v[n].score);
             // todo!("clone")
             v_outliers.push(Process { pid: v[n].pid, score: v[n].score }); 
         }
@@ -114,7 +114,7 @@ fn main() {
 
     let timeout       = Duration::from_secs(2);
 
-    let mut sess = SyncSession::new(agent_addr, community, Some(timeout), 0).unwrap();
+    let mut sess = SyncSession::new(agent_addr, community, Some(timeout), 0).expect("Error creating session");
     let mut now = Instant::now();
 
     let mut stdout = stdout();
@@ -125,7 +125,7 @@ fn main() {
     let config_toml: Config;
     if Path::new("snmpfetch_config.toml").is_file()
     {
-        let content = fs::read_to_string("snmpfetch_config.toml").unwrap();
+        let content = fs::read_to_string("snmpfetch_config.toml").expect("Error reading file");
         config_toml = match toml::from_str(&content)
         {
             Ok(c) => c,
@@ -142,7 +142,7 @@ fn main() {
     }
 
     let client = InfluxClient::new(config_toml.database.influxdb_url, &config_toml.database.influxdb_name);
-    now = now.checked_sub(Duration::from_secs(config_toml.timings.webhook_pause)).unwrap();
+    now = now.checked_sub(Duration::from_secs(config_toml.timings.webhook_pause)).expect("Error subtracting duration");
 
     let url = gen_url(&config_toml.database.influxdb_name);
     if args.to_loop { cls(&mut stdout); }
