@@ -21,7 +21,7 @@ view systemonly included .1.3.6.1.4.1.2021
 view systemonly included .1.3.6.1.2.1.25
 ```
 5.  Run `service snmpd restart`
-6. `git clone https://github.com/mour0/snmpfetch.git`
+6. Clone this repository 
 7. `cd snmpfetch/`
 8. `cargo build --release`
 9. `cd target/release/`

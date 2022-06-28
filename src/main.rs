@@ -119,8 +119,6 @@ fn main() {
 
     let mut stdout = stdout();
 
-    // TODO set in config ifle
-    
     // --- Configs --- 
     let config_toml: Config;
     if Path::new("snmpfetch_config.toml").is_file()
